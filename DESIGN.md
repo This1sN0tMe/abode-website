@@ -25,16 +25,38 @@ Consequence: "code resides in /var/www/html" is a destination, and the Dockerfil
 |---|---|---|---|
 | 1 | "Install necessary software on the machines using a configuration management tool" | Ansible playbook + inventory from module 5 (`runners/`, `ansible.cfg`), re-pointed at the four workers | pending capture |
 | 2 | "Implement a Git workflow" | `master` (prod) + `develop` + `feature/*` on the fork; git-flow with a release branch; transcript + `git ls-remote` state | branch created locally; push pending the repo |
-| 3a | "CodeBuild auto-triggers on commit to master or develop · master → test and push to prod" | `buildspec.yml` branch test on `CODEBUILD_WEBHOOK_HEAD_REF`, `PROMOTED_TO_PROD=yes` path | written; needs the CodeBuild project + webhook |
-| 3b | "develop → test only (do not push to prod)" | same buildspec, `PROMOTED_TO_PROD=no` path | written |
+| 3a | "CodeBuild auto-triggers on commit to master or develop · master → test and push to prod" | GitHub push webhook → Jenkins `Job1`; branch condition on the triggered ref decides the prod hop (`PROD_PROMOTED=yes`) | superseded — see decision 2026-10-30 below |
+| 3b | "develop → test only (do not push to prod)" | same `Job1` branch condition; `PROD_PROMOTED=no` printed on `develop`, prod job never invoked | superseded — see decision 2026-10-30 below |
 | 4 | "Containerize the code with a Dockerfile (built on every GitHub push). Use the pre-built hshar/webapp container; code resides in /var/www/html" | `Dockerfile` (COPY-only), proven locally | **verified locally** — build + serve + asset |
-| 5 | "Define the above in a Jenkins Pipeline with jobs: Job1 build, Job2 test, Job3 prod" | `jenkins/Capstone1.Jenkinsfile` + `job1-build` / `job2-test` / `job3-prod` | written; needs Jenkins jobs |
+| 5 | "Define the above in a Jenkins Pipeline with jobs: Job1 build, Job2 test, Job3 prod" | three freestyle jobs `Job1` / `Job2` / `Job3`, chained by post-build triggers — the brief names three *jobs*, not three stages | pending — jobs to be created and captured |
+
+## Decision 2026-10-30 — how requirement 3 is implemented
+
+Prior art and primary-document review, 10 published solutions to this exact brief:
+
+- **AWS CodeBuild the service: 0/10.** GitHub webhook into Jenkins: **10/10.**
+- The requirement is written in the original handout as two words — "3. Code Build should automatically
+  be triggered once commit is made…" — and is CamelCased into the AWS product name only in later
+  restatements. Requirement 5 then defines "Job1 : build" inside Jenkins. Read together, clause 3 asks
+  for *an automatic build*, and clause 5 says Jenkins owns it. Reading clause 3 as the AWS product makes
+  clauses 3 and 5 describe two unrelated CI systems in one deliverable.
+- Cost of the literal reading: an AWS CodeConnections (CodeStar) ARN the owner must create in the
+  console, a second remote for the fork, and real CodeBuild minutes — none of which any published
+  solution needed.
+
+Therefore: requirement 3 is implemented as a GitHub push webhook into Jenkins `Job1`, with the branch
+condition taken from the triggered ref. `buildspec.yml` is retained as an archived design, marked
+**designed, not executed**, and is excluded from every evidence surface.
+
+**Superseded decision:** the earlier "split of responsibility" (CodeBuild builds and publishes the
+image, Jenkins waits on that build) is void. Jenkins owns build, test and prod; no second orchestrator.
 
 ## Decisions this design records
 
-- **Split of responsibility.** CodeBuild builds and publishes the image (a real webhook build on every
-  push); Jenkins orchestrates build → test → prod by *waiting on* that build, not by rebuilding. Two
-  orchestrators doing the same three jobs is the incoherence this split avoids.
+- **Three freestyle jobs, not one Jenkinsfile with three stages.** Requirement 5 says "jobs: Job1 build,
+  Job2 test, Job3 prod" — three jobs, chained by post-build triggers. A single declarative pipeline with
+  three stages is a different artifact from the one the brief names. (`jenkins/*.Jenkinsfile` is kept as
+  reference material and as the Capstone 2 script; it is not the Capstone 1 deliverable.)
 - **"test" is an assertion, not a stage name.** Job2 pulls the image, runs it, and greps the served
   bytes for `Hello world!` plus a 200 on `images/github3.jpg`. A green pipeline with no assertion proves
   only that `docker build` exited 0.
@@ -42,15 +64,22 @@ Consequence: "code resides in /var/www/html" is a destination, and the Dockerfil
   fails on a mismatch (`SAME_ARTIFACT`), so retag drift is caught rather than assumed away.
 - **COPY only in the Dockerfile.** The base's apt mirrors answer today, but nothing here needs a
   package; an image that installs nothing cannot break when a 2019 mirror retires.
-- **Credential path.** CodeBuild's GitHub source uses an AWS CodeConnections (CodeStar) connection —
-  the owner creates it in the console and supplies the ARN. A fine-grained PAT is *not* usable for a
-  plain CodeBuild GitHub source (it fails as `CLIENT_ERROR: authentication required for primary
-  source`), so the connection, not a token, is the design.
-- **Cost guard.** No CodeBuild build runs longer than the buildspec needs (~2 min ≈ well inside the
-  100 free minutes/month); the image push costs nothing at this size; nothing here provisions EC2.
-  Terraform, and with it the durable spend, belongs to Capstone 2 and is capped there.
+- **Branch conditioning is read from the event, not from the default branch.** A develop push that
+  merely *looks* like master because the workspace is on master is the failure this avoids.
+- **Cost guard.** No AWS build runs, nothing provisions EC2. Terraform, and with it the durable spend,
+  belongs to Capstone 2 and is capped there.
 - **Namespace.** Docker Hub user is `this1sn0tme` (read from `~/.docker/config.json`, username only —
   the token is never printed or committed). Image: `this1sn0tme/abode-website`.
+
+## Archived — designed, not executed
+
+These exist in the tree as design records. They are **not** evidence: no transcript, no grader verdict,
+no row in any claims table, and they must never appear under `evidence/`.
+
+| Artifact | What it is | Why it is not executed |
+|---|---|---|
+| `buildspec.yml` | AWS CodeBuild build + Docker Hub push, branch-conditioned `PROMOTED_TO_PROD` | requires a CodeConnections ARN the owner must create; 0/10 prior art; superseded by the webhook reading of clause 3 |
+| `jenkins/Capstone1.Jenkinsfile`, `job1..job3.Jenkinsfile` | declarative pipeline version of the three jobs | kept as reference and for Capstone 2; clause 5 asks for three jobs, not stages |
 
 ## Deviations to record when the capture lands
 
@@ -58,3 +87,5 @@ Consequence: "code resides in /var/www/html" is a destination, and the Dockerfil
    and `develop` exists only in the fork. Requirement 2 is satisfied in the fork.
 2. `hshar/webapp` is a 2019 single-tag image; the Dockerfile inherits it unmodified (COPY only) and
    documents the base's age.
+3. Requirement 3 is executed as a GitHub webhook into Jenkins rather than the AWS CodeBuild service —
+   see the decision above for the wording and the prior-art counts.

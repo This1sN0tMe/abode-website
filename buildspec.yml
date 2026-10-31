@@ -1,8 +1,17 @@
 version: 0.2
-# Capstone 1 — CodeBuild builds and pushes the product image on every GitHub push.
-# Which system owns what is a decision this file records: CodeBuild builds and publishes the image;
-# Jenkins orchestrates test -> prod by pulling that same image. Without that split, two orchestrators
-# do the same three jobs and the deliverable reads as incoherent.
+# ARCHIVED — DESIGNED, NOT EXECUTED. This file is not evidence.
+#
+# Capstone 1's requirement 3 ("Code Build should automatically be triggered once commit is made…") is
+# implemented as a GitHub push webhook into Jenkins Job1, not with the AWS CodeBuild service. Reasons,
+# counted: 0/10 published solutions to this brief use AWS CodeBuild, 10/10 use a Jenkins webhook; the
+# original handout writes the requirement as two words, "Code Build"; and requirement 5 makes Jenkins
+# ("Job1 : build") the owner of the build stage. See DESIGN.md § "Decision 2026-10-30".
+#
+# Kept as a design record only: it must never sit under evidence/, carry a grader verdict, or appear in
+# a claims table. Reviving it needs a CodeConnections (CodeStar) ARN created in the AWS console.
+#
+# What it would do if executed: Capstone 1 — CodeBuild builds and pushes the product image on every
+# GitHub push, branch-conditioned so master promotes to prod and develop stops at test.
 env:
   variables:
     IMAGE_REPO: docker.io/this1sn0tme/abode-website
