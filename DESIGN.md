@@ -30,6 +30,10 @@ Consequence: "code resides in /var/www/html" is a destination, and the Dockerfil
 | 4 | "Containerize the code with a Dockerfile (built on every GitHub push). Use the pre-built hshar/webapp container; code resides in /var/www/html" | `Dockerfile` (COPY-only), proven locally | **verified locally** — build + serve + asset |
 | 5 | "Define the above in a Jenkins Pipeline with jobs: Job1 build, Job2 test, Job3 prod" | three freestyle jobs `Job1-build` / `Job2-test` / `Job3-prod`, chained by parameterised trigger calls so the branch decision travels with the build — the brief names three *jobs*, not three stages | **captured** — both branches, 15/15 each |
 
+Evidence set: `evidence/capstone1/README.md` — three graded transcripts plus `c1-gui-annex.pdf` (6 pages:
+dashboard, three job configs, the master build console, the served product page). Screenshots are additive;
+the transcripts remain primary.
+
 ## Decision 2026-10-30 — how requirement 3 is implemented
 
 Prior art and primary-document review, 10 published solutions to this exact brief:
