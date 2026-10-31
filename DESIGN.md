@@ -28,7 +28,7 @@ Consequence: "code resides in /var/www/html" is a destination, and the Dockerfil
 | 3a | "CodeBuild auto-triggers on commit to master or develop · master → test and push to prod" | GitHub push webhook → Jenkins `Job1`; branch condition on the triggered ref decides the prod hop (`PROD_PROMOTED=yes`) | superseded — see decision 2026-10-30 below |
 | 3b | "develop → test only (do not push to prod)" | same `Job1` branch condition; `PROD_PROMOTED=no` printed on `develop`, prod job never invoked | superseded — see decision 2026-10-30 below |
 | 4 | "Containerize the code with a Dockerfile (built on every GitHub push). Use the pre-built hshar/webapp container; code resides in /var/www/html" | `Dockerfile` (COPY-only), proven locally | **verified locally** — build + serve + asset |
-| 5 | "Define the above in a Jenkins Pipeline with jobs: Job1 build, Job2 test, Job3 prod" | three freestyle jobs `Job1` / `Job2` / `Job3`, chained by post-build triggers — the brief names three *jobs*, not three stages | pending — jobs to be created and captured |
+| 5 | "Define the above in a Jenkins Pipeline with jobs: Job1 build, Job2 test, Job3 prod" | three freestyle jobs `Job1-build` / `Job2-test` / `Job3-prod`, chained by parameterised trigger calls so the branch decision travels with the build — the brief names three *jobs*, not three stages | jobs created; chain proven by pre-flight; push-triggered capture pending the fork |
 
 ## Decision 2026-10-30 — how requirement 3 is implemented
 
@@ -54,9 +54,11 @@ image, Jenkins waits on that build) is void. Jenkins owns build, test and prod; 
 ## Decisions this design records
 
 - **Three freestyle jobs, not one Jenkinsfile with three stages.** Requirement 5 says "jobs: Job1 build,
-  Job2 test, Job3 prod" — three jobs, chained by post-build triggers. A single declarative pipeline with
-  three stages is a different artifact from the one the brief names. (`jenkins/*.Jenkinsfile` is kept as
-  reference material and as the Capstone 2 script; it is not the Capstone 1 deliverable.)
+  Job2 test, Job3 prod" — three jobs, chained. A single declarative pipeline with three stages is a
+  different artifact from the one the brief names. The chain is an authenticated trigger call carrying
+  branch, image and image id as parameters, because a downstream job cannot inherit the branch that
+  triggered its upstream from its own checkout. (`jenkins/*.Jenkinsfile` is kept as reference material and
+  as the Capstone 2 script; it is not the Capstone 1 deliverable.)
 - **"test" is an assertion, not a stage name.** Job2 pulls the image, runs it, and greps the served
   bytes for `Hello world!` plus a 200 on `images/github3.jpg`. A green pipeline with no assertion proves
   only that `docker build` exited 0.
@@ -89,3 +91,31 @@ no row in any claims table, and they must never appear under `evidence/`.
    documents the base's age.
 3. Requirement 3 is executed as a GitHub webhook into Jenkins rather than the AWS CodeBuild service —
    see the decision above for the wording and the prior-art counts.
+
+## Pre-flight 2026-10-30 — NOT evidence
+
+A dry run of the three job scripts against the local clone, to prove the chain logic before the fork
+exists. No transcript was filed, no grader was run, and nothing here counts toward any status: the graded
+artifact must be a push-triggered build against the GitHub remote.
+
+Measured, in the Jenkins console:
+
+| run | Job1 | Job2 | Job3 | observation |
+|---|---|---|---|---|
+| `BRANCH_OVERRIDE=develop` | PASS | SUCCESS | not invoked | `PROD_PROMOTED=no`, `PROD_SKIPPED=yes` — test only, prod untouched |
+| `BRANCH_OVERRIDE=master` | PASS | SUCCESS | SUCCESS | `SAME_ARTIFACT=yes`, prod 200, body `Hello world!` on :80 |
+
+Assertions that actually fired: `home_status=200`, `asset_status=200`, `asset_bytes=107935`,
+`body=Hello world! PASS`, and on the prod hop the pulled image id matched the one Job2 tested.
+
+Three things this dry run settled, each paid for:
+
+- **Jobs must reference their scripts by absolute path.** An inline shell step has to be XML-escaped, and a
+  bare `2>&1` inside `<command>` is invalid XML — createItem returned 500 with an HTML page while the
+  script printed "CREATED". Bodies now live in `runners/job{1,2,3}-*.sh`.
+- **A job `authToken` is not enough to trigger a downstream build.** Anonymous holds no Job/Build
+  permission, so `/buildWithParameters?token=…` returns 403. The trigger needs basic auth **and** a CSRF
+  crumb; plain basic-auth POST is also 403. Production would use an API token bound to a build user.
+- **`file://` SCM is refused by the git plugin** ("references a local directory, which may be insecure")
+  unless `ALLOW_LOCAL_CHECKOUT` is set. Not worked around on purpose — relaxing a controller security
+  flag to serve a temporary dry run would outlive the dry run. The real path is the GitHub remote.
