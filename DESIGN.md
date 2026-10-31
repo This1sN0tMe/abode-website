@@ -23,7 +23,7 @@ Consequence: "code resides in /var/www/html" is a destination, and the Dockerfil
 
 | # | Requirement (verbatim) | Artifact | Status |
 |---|---|---|---|
-| 1 | "Install necessary software on the machines using a configuration management tool" | Ansible playbook + inventory from module 5 (`runners/`, `ansible.cfg`), re-pointed at the four workers | pending capture |
+| 1 | "Install necessary software on the machines using a configuration management tool" | `ansible/provision.yml` + `ansible/inventory.ini` — the controller and the two servers the pipeline deploys against, with each machine reporting its own versions | **captured** — `evidence/capstone1/c1-provision.txt`, verify.py 19/19, pass 2 changed=0 on all three |
 | 2 | "Implement a Git workflow" | `master` (prod) + `develop` on the fork at `git@github.com:This1sN0tMe/abode-website.git`; release merge `14db960`; `git ls-remote` inside both captures | **captured** — refs proven, not asserted |
 | 3a | "CodeBuild auto-triggers on commit to master or develop · master → test and push to prod" | GitHub push webhook → Jenkins `Job1`; branch condition on the triggered ref decides the prod hop (`PROD_PROMOTED=yes`) | **captured** — `evidence/capstone1/c1-master-push.txt`, verify.py 15/15 |
 | 3b | "develop → test only (do not push to prod)" | same `Job1` branch condition; `PROD_PROMOTED=no` printed on `develop`, prod job never invoked | **captured** — `evidence/capstone1/c1-develop-push.txt`, verify.py 15/15 |

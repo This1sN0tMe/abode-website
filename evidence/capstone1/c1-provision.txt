@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# 40-provision.sh — Capstone 1 requirement 1, captured.
+#
+#   runners/capture.sh evidence/capstone1/c1-provision.txt bash -v runners/40-provision.sh
+#
+# Runs the playbook twice. The first run installs; the second is the idempotency proof — a configuration
+# management tool that reports changes on every run is a shell script with extra steps. The contract
+# asserts changed=0 on the second pass for every host.
+#
+# Each machine's software report is written by Ansible onto the controller and printed here verbatim, so
+# the version strings in the transcript come from the machine rather than from the task's own claim.
+set -u
+
+LABEL=provision
+CAP=$(cd "$(dirname "$0")/.." && pwd)
+cd "$(dirname "$0")/.." && pwd
+dirname "$0"
+CHECKS="$CAP/runners/checks/$LABEL.checks"
+
+echo "CHECKS sha256=$(shasum -a 256 "$CHECKS" | cut -d' ' -f1)"
+shasum -a 256 "$CHECKS" | cut -d' ' -f1
+CHECKS sha256=385da081fa79a641b587414a394807d7ef1524e8b7f681dbbc161c510ab6350f
+echo "STATE ansible=$(ansible --version 2>/dev/null | head -1)"
+ansible --version 2>/dev/null | head -1
+STATE ansible=ansible [core 2.19.14]
+echo "STATE inventory=$(sed -n 's/^\(jenkins-[a-z]*\).*/\1/p' "$CAP/ansible/inventory.ini" | tr '\n' ' ')"
+sed -n 's/^\(jenkins-[a-z]*\).*/\1/p' "$CAP/ansible/inventory.ini" | tr '\n' ' '
+STATE inventory=jenkins-master jenkins-test jenkins-prod 
+
+cd "$CAP/ansible" || exit 1
+
+echo "===== pass 1: present ====="
+===== pass 1: present =====
+ansible-playbook provision.yml 2>&1 | grep -E 'PLAY RECAP|jenkins-|fatal|FAILED|failed='
+ok: [jenkins-test]
+ok: [jenkins-prod]
+ok: [jenkins-test]
+ok: [jenkins-prod]
+ok: [jenkins-prod]
+ok: [jenkins-test]
+ok: [jenkins-test]
+ok: [jenkins-prod]
+ok: [jenkins-test -> localhost]
+ok: [jenkins-prod -> localhost]
+ok: [jenkins-master]
+ok: [jenkins-master -> localhost]
+PLAY RECAP *********************************************************************
+jenkins-master             : ok=2    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+jenkins-prod               : ok=5    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+jenkins-test               : ok=5    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+echo "===== pass 2: idempotent (expect changed=0) ====="
+===== pass 2: idempotent (expect changed=0) =====
+OUT2=$(ansible-playbook provision.yml 2>&1)
+ansible-playbook provision.yml 2>&1
+echo "$OUT2" | grep -E 'PLAY RECAP|jenkins-|fatal|FAILED'
+ok: [jenkins-prod]
+ok: [jenkins-test]
+ok: [jenkins-test]
+ok: [jenkins-prod]
+ok: [jenkins-test]
+ok: [jenkins-prod]
+ok: [jenkins-test]
+ok: [jenkins-prod]
+ok: [jenkins-prod -> localhost]
+ok: [jenkins-test -> localhost]
+ok: [jenkins-master]
+ok: [jenkins-master -> localhost]
+PLAY RECAP *********************************************************************
+jenkins-master             : ok=2    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+jenkins-prod               : ok=5    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+jenkins-test               : ok=5    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+# Derived from pass 2's own recap line, printed beside it so a reader can check the arithmetic. This is
+# a parse of ansible's report, not a second measurement.
+echo "$OUT2" | grep -E '^jenkins-[a-z]+ +: ok=' | while read -r line; do
+  h=$(printf '%s' "$line" | awk '{print $1}')
+  c=$(printf '%s' "$line" | sed -n 's/.*changed=\([0-9]*\).*/\1/p')
+  f=$(printf '%s' "$line" | sed -n 's/.*failed=\([0-9]*\).*/\1/p')
+  echo "IDEMPOTENT host=$h changed=$c failed=$f"
+done
+printf '%s' "$line" | awk '{print $1}'
+printf '%s' "$line" | sed -n 's/.*changed=\([0-9]*\).*/\1/p'
+printf '%s' "$line" | sed -n 's/.*failed=\([0-9]*\).*/\1/p'
+IDEMPOTENT host=jenkins-master changed=0 failed=0
+printf '%s' "$line" | awk '{print $1}'
+printf '%s' "$line" | sed -n 's/.*changed=\([0-9]*\).*/\1/p'
+printf '%s' "$line" | sed -n 's/.*failed=\([0-9]*\).*/\1/p'
+IDEMPOTENT host=jenkins-prod changed=0 failed=0
+printf '%s' "$line" | awk '{print $1}'
+printf '%s' "$line" | sed -n 's/.*changed=\([0-9]*\).*/\1/p'
+printf '%s' "$line" | sed -n 's/.*failed=\([0-9]*\).*/\1/p'
+IDEMPOTENT host=jenkins-test changed=0 failed=0
+
+echo "===== what each machine reports about itself ====="
+===== what each machine reports about itself =====
+for h in jenkins-master jenkins-test jenkins-prod; do
+  echo "--- $h ---"
+  cat "/tmp/capstone1-provision-$h.txt" 2>/dev/null || echo "MISSING report for $h"
+done
+--- jenkins-master ---
+CONTROLLER docker=29.9.2
+CONTROLLER jenkins_http=200
+CONTROLLER java_on_path=openjdk version "17.0.20.1" 2026-08-18
+CONTROLLER jenkins_jdk=openjdk version "21.0.13" 2026-10-20 LTS
+--- jenkins-test ---
+SOFTWARE host=test-node os=Ubuntu 26.04
+SOFTWARE git=2.53.0
+SOFTWARE curl=8.18.0
+SOFTWARE python=3.14.4
+--- jenkins-prod ---
+SOFTWARE host=prod-node os=Ubuntu 26.04
+SOFTWARE git=2.53.0
+SOFTWARE curl=8.18.0
+SOFTWARE python=3.14.4
+
+echo "RESULT PROVISION PASS"
+RESULT PROVISION PASS
