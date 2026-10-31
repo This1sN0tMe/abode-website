@@ -1,0 +1,83 @@
+# Capstone 1 — requirement 1: "Install necessary software on the machines using a configuration
+# management tool."
+#
+# Deliberately declarative and idempotent: a second run must report changed=0 on everything. A playbook
+# that reports ok on a machine where the package is actually absent is the failure this is written
+# against, so every claim ends in a version string read from the machine, not from the task's own
+# self-report.
+---
+- name: Provision the Capstone 1 machines
+  hosts: servers
+  gather_facts: false
+  become: true
+  vars:
+    base_packages:
+      - git
+      - curl
+      - ca-certificates
+
+  tasks:
+    # The agent image is a JDK image with git added; it may not carry python, and every real module needs
+    # it. `raw` runs before fact gathering for exactly this reason.
+    - name: Ensure a python3 exists before any module runs
+      ansible.builtin.raw: >-
+        command -v python3 >/dev/null 2>&1 ||
+        (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3-minimal)
+      changed_when: false
+
+    - name: Gather facts
+      ansible.builtin.setup:
+        gather_subset: [min]
+
+    - name: Install the base software
+      ansible.builtin.apt:
+        name: "{{ base_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    # Read the version off the machine. This is the assertion; the task above only reports intent.
+    - name: Report the installed software, as the machine sees it
+      ansible.builtin.shell: |
+        echo "SOFTWARE host=$(hostname) os={{ ansible_distribution }} {{ ansible_distribution_version }}"
+        echo "SOFTWARE git=$(git --version 2>/dev/null | awk '{print $3}')"
+        echo "SOFTWARE curl=$(curl --version 2>/dev/null | head -1 | awk '{print $2}')"
+        echo "SOFTWARE python=$(python3 -V 2>&1 | awk '{print $2}')"
+      args:
+        executable: /bin/bash
+      changed_when: false
+      register: software
+
+    # Materialised on the controller rather than printed, so the transcript carries each machine's own
+    # words with no ansible formatting around them.
+    - name: Materialise this host's report on the controller
+      ansible.builtin.copy:
+        content: "{{ software.stdout }}\n"
+        dest: "/tmp/capstone1-provision-{{ inventory_hostname }}.txt"
+        mode: "0644"
+      delegate_to: localhost
+      become: false
+
+- name: Verify the controller can do its job
+  hosts: master
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Assert the container runtime and the controller are present
+      ansible.builtin.shell: |
+        echo "CONTROLLER docker=$(docker --version 2>/dev/null | awk '{print $3}' | tr -d ,)"
+        echo "CONTROLLER jenkins_http=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/json)"
+        echo "CONTROLLER java_on_path=$(java -version 2>&1 | head -1)"
+        echo "CONTROLLER jenkins_jdk=$("$HOME"/dev/labs/devops/toolchain/jdk21/Contents/Home/bin/java -version 2>&1 | head -1)"
+      args:
+        executable: /bin/bash
+      changed_when: false
+      register: ctl
+
+    - name: Materialise the controller report
+      ansible.builtin.copy:
+        content: "{{ ctl.stdout }}\n"
+        dest: "/tmp/capstone1-provision-{{ inventory_hostname }}.txt"
+        mode: "0644"
+      delegate_to: localhost
+      become: false

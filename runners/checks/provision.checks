@@ -1,0 +1,32 @@
+# Capstone 1 — requirement 1 contract: "Install necessary software on the machines using a configuration
+# management tool."
+#
+# Frozen before the capture. Anchors matter here: the recap lines are the only place ansible states a
+# per-host outcome, and the SOFTWARE / CONTROLLER lines are produced by the machines themselves, not by
+# the task that installed anything.
+
+# Each of the two servers reports its own os and versions.
+count  :: ^SOFTWARE host= :: 2
+count  :: ^SOFTWARE git= :: 2
+count  :: ^SOFTWARE curl= :: 2
+count  :: ^SOFTWARE python= :: 2
+
+# The controller reports what the pipeline needs from it.
+count  :: ^CONTROLLER docker= :: 1
+count  :: ^CONTROLLER jenkins_http=200$ :: 1
+count  :: ^CONTROLLER java_on_path= :: 1
+count  :: ^CONTROLLER jenkins_jdk=.*21\. :: 1
+
+# Idempotency: pass 2 changes nothing on any host. The IDEMPOTENT lines are parsed from pass 2's own
+# recap, which is printed beside them, so the claim is checkable rather than trusted.
+count  :: ^IDEMPOTENT host=jenkins-master changed=0 failed=0$ :: 1
+count  :: ^IDEMPOTENT host=jenkins-test changed=0 failed=0$ :: 1
+count  :: ^IDEMPOTENT host=jenkins-prod changed=0 failed=0$ :: 1
+
+count  :: ^jenkins-master +: ok=.*failed=0 :: 2
+count  :: ^jenkins-test +: ok=.*failed=0 :: 2
+count  :: ^jenkins-prod +: ok=.*failed=0 :: 2
+
+absent :: unreachable=[1-9] :: 0
+absent :: ^fatal: :: 0
+last   :: ^RESULT PROVISION PASS :: 0
