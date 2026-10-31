@@ -1,0 +1,19 @@
+# Capstone 1 — develop push contract (requirement 3b: test only, prod must not be touched)
+#
+# Frozen BEFORE the capture. Committed in the same change set as runners/30-capture.sh.
+# Grammar: <mode> :: <regex> :: <expected>   (modes: count | absent | last)
+#
+# Anchors are deliberate: "Started by GitHub push" appears once, on the build-cause line, and cannot be
+# satisfied by a runner's own comment or by a command line containing the phrase.
+
+count  :: ^Started by GitHub push by :: 1
+count  :: ^BRANCH=develop$ :: 1
+count  :: ^PROD_PROMOTED=no$ :: 1
+count  :: ^PROD_SKIPPED=yes$ :: 1
+count  :: ^ASSERT home_status=200$ :: 1
+count  :: ^ASSERT asset_status=200$ :: 1
+count  :: ^ASSERT asset_bytes=107935$ :: 1
+count  :: ^RESULT TEST PASS :: 1
+absent :: ^TRIGGERED Job3-prod
+absent :: ^RESULT PROD PASS
+last   :: ^RESULT CAPTURE (PASS|FAIL)

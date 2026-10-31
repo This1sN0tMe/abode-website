@@ -1,0 +1,16 @@
+# Capstone 1 — master push contract (requirement 3a: test then push to prod)
+#
+# Frozen BEFORE the capture. Committed in the same change set as runners/30-capture.sh.
+# Grammar: <mode> :: <regex> :: <expected>   (modes: count | absent | last)
+
+count  :: ^Started by GitHub push by :: 1
+count  :: ^BRANCH=master$ :: 1
+count  :: ^PROD_PROMOTED=yes$ :: 1
+count  :: ^TRIGGERED Job3-prod :: 1
+count  :: ^SAME_ARTIFACT=yes$ :: 1
+count  :: ^ASSERT prod_status=200$ :: 1
+count  :: ^ASSERT prod_body=Hello world! PASS$ :: 1
+count  :: ^RESULT TEST PASS :: 1
+count  :: ^RESULT PROD PASS :: 1
+absent :: ^PROD_SKIPPED=yes
+last   :: ^RESULT CAPTURE (PASS|FAIL)
