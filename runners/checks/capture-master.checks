@@ -15,4 +15,4 @@ count  :: ^ASSERT prod_body=Hello world! PASS$ :: 1
 count  :: ^RESULT TEST PASS :: 1
 count  :: ^RESULT PROD PASS :: 1
 absent :: ^PROD_SKIPPED=yes :: 0
-last   :: ^RESULT CAPTURE (PASS|FAIL)
+last   :: ^RESULT CAPTURE (PASS|FAIL) :: 0

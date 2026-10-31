@@ -18,4 +18,4 @@ count  :: ^ASSERT asset_bytes=107935$ :: 1
 count  :: ^RESULT TEST PASS :: 1
 absent :: ^TRIGGERED Job3-prod :: 0
 absent :: ^RESULT PROD PASS :: 0
-last   :: ^RESULT CAPTURE (PASS|FAIL)
+last   :: ^RESULT CAPTURE (PASS|FAIL) :: 0
