@@ -6,7 +6,9 @@
 # Anchors are deliberate: "Started by GitHub push" appears once, on the build-cause line, and cannot be
 # satisfied by a runner's own comment or by a command line containing the phrase.
 
-count  :: ^Started by GitHub push by :: 1
+count  :: ^LOG .*PushEvent for https://github.com/This1sN0tMe/abode-website :: 1
+count  :: ^LOG .*Poked Job1-build :: 1
+count  :: ^Started by (GitHub push by This1sN0tMe|an SCM change)$ :: 1
 count  :: ^BRANCH=develop$ :: 1
 count  :: ^PROD_PROMOTED=no$ :: 1
 count  :: ^PROD_SKIPPED=yes$ :: 1
@@ -14,6 +16,6 @@ count  :: ^ASSERT home_status=200$ :: 1
 count  :: ^ASSERT asset_status=200$ :: 1
 count  :: ^ASSERT asset_bytes=107935$ :: 1
 count  :: ^RESULT TEST PASS :: 1
-absent :: ^TRIGGERED Job3-prod
-absent :: ^RESULT PROD PASS
+absent :: ^TRIGGERED Job3-prod :: 0
+absent :: ^RESULT PROD PASS :: 0
 last   :: ^RESULT CAPTURE (PASS|FAIL)
