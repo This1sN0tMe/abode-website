@@ -24,11 +24,11 @@ Consequence: "code resides in /var/www/html" is a destination, and the Dockerfil
 | # | Requirement (verbatim) | Artifact | Status |
 |---|---|---|---|
 | 1 | "Install necessary software on the machines using a configuration management tool" | Ansible playbook + inventory from module 5 (`runners/`, `ansible.cfg`), re-pointed at the four workers | pending capture |
-| 2 | "Implement a Git workflow" | `master` (prod) + `develop` + `feature/*` on the fork; git-flow with a release branch; transcript + `git ls-remote` state | branch created locally; push pending the repo |
-| 3a | "CodeBuild auto-triggers on commit to master or develop · master → test and push to prod" | GitHub push webhook → Jenkins `Job1`; branch condition on the triggered ref decides the prod hop (`PROD_PROMOTED=yes`) | superseded — see decision 2026-10-30 below |
-| 3b | "develop → test only (do not push to prod)" | same `Job1` branch condition; `PROD_PROMOTED=no` printed on `develop`, prod job never invoked | superseded — see decision 2026-10-30 below |
+| 2 | "Implement a Git workflow" | `master` (prod) + `develop` on the fork at `git@github.com:This1sN0tMe/abode-website.git`; release merge `14db960`; `git ls-remote` inside both captures | **captured** — refs proven, not asserted |
+| 3a | "CodeBuild auto-triggers on commit to master or develop · master → test and push to prod" | GitHub push webhook → Jenkins `Job1`; branch condition on the triggered ref decides the prod hop (`PROD_PROMOTED=yes`) | **captured** — `evidence/capstone1/c1-master-push.txt`, verify.py 15/15 |
+| 3b | "develop → test only (do not push to prod)" | same `Job1` branch condition; `PROD_PROMOTED=no` printed on `develop`, prod job never invoked | **captured** — `evidence/capstone1/c1-develop-push.txt`, verify.py 15/15 |
 | 4 | "Containerize the code with a Dockerfile (built on every GitHub push). Use the pre-built hshar/webapp container; code resides in /var/www/html" | `Dockerfile` (COPY-only), proven locally | **verified locally** — build + serve + asset |
-| 5 | "Define the above in a Jenkins Pipeline with jobs: Job1 build, Job2 test, Job3 prod" | three freestyle jobs `Job1-build` / `Job2-test` / `Job3-prod`, chained by parameterised trigger calls so the branch decision travels with the build — the brief names three *jobs*, not three stages | jobs created; chain proven by pre-flight; push-triggered capture pending the fork |
+| 5 | "Define the above in a Jenkins Pipeline with jobs: Job1 build, Job2 test, Job3 prod" | three freestyle jobs `Job1-build` / `Job2-test` / `Job3-prod`, chained by parameterised trigger calls so the branch decision travels with the build — the brief names three *jobs*, not three stages | **captured** — both branches, 15/15 each |
 
 ## Decision 2026-10-30 — how requirement 3 is implemented
 

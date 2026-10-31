@@ -1,0 +1,308 @@
+#!/usr/bin/env bash
+# 30-capture.sh — capture one push-triggered Capstone 1 run as evidence.
+#
+#   bash runners/30-capture.sh develop
+#   bash runners/30-capture.sh master
+#
+# Run it UNDER `bash -v` through the lab capture wrapper so the source lines land in the transcript:
+#   runners/capture.sh evidence/capstone1/c1-develop-push.txt bash -v runners/30-capture.sh develop
+#
+# What makes this evidence and not a demo: the build is started by GitHub, not by this script. The script
+# commits, pushes, then waits for the builds that push caused, and prints only THOSE builds' consoles.
+#
+# Two rules this run learned the hard way (v1 violated both):
+#   1. Never print a job's `lastBuild` console. v1 printed Job3-prod's console during a *develop* capture
+#      because an earlier master push had left a prod build behind — a transcript that puts a prod deploy
+#      inside a test-only run is fabricated evidence, however accidental. Every console printed here is
+#      a build number that did not exist before this run.
+#   2. The cause line is not the only proof. "Started by GitHub push by <user>" appears when the github
+#      plugin's trigger wins the race; when the poll it schedules wins instead, the cause reads
+#      "Started by an SCM change" for the same push. So the transcript also carries the controller's own
+#      log lines from this run's window — the PushEvent receipt and the "Poked <job>" that follow it —
+#      which is a stronger statement than any cause string: GitHub delivered a push for THIS repo and it
+#      reached THIS job.
+#
+# The contract is frozen in runners/checks/capture-<label>.checks and must be COMMITTED before this runs;
+# its sha256 is printed as the transcript's first line so the grader can prove which contract applied.
+set -u
+
+LABEL="${1:-}"
+case "$LABEL" in
+  develop) BRANCH=develop; EXPECT_PROD=no ;;
+  master)  BRANCH=master;  EXPECT_PROD=yes ;;
+  *) echo "usage: 30-capture.sh develop|master" >&2; exit 2 ;;
+esac
+
+CAP=$(cd "$(dirname "$0")/.." && pwd)
+cd "$(dirname "$0")/.." && pwd
+dirname "$0"
+CHECKS="$CAP/runners/checks/capture-$LABEL.checks"
+JENKINS=${JENKINS:-http://localhost:8080}
+JROOT=${JROOT:-$HOME/dev/labs/devops/jenkins}
+JLOG=$JROOT/jenkins.log
+PW=$(tr -d '\n' < "$JROOT/.admin_pw")
+tr -d '\n' < "$JROOT/.admin_pw"
+WAIT=${WAIT:-240}
+
+# The provenance line must be the first thing in the transcript.
+echo "CHECKS sha256=$(shasum -a 256 "$CHECKS" | cut -d' ' -f1)"
+shasum -a 256 "$CHECKS" | cut -d' ' -f1
+CHECKS sha256=e36fdd805ab899d77add1aa29656059312064f61a228155a29e2c0acca17128d
+
+cd "$CAP" || exit 1
+echo "STATE branch=$(git branch --show-current) head=$(git rev-parse --short HEAD)"
+git branch --show-current
+git rev-parse --short HEAD
+STATE branch=develop head=dd6bc7f
+echo "STATE remote=$(git remote get-url origin)"
+git remote get-url origin
+STATE remote=git@github.com:This1sN0tMe/abode-website.git
+
+# Everything this run must move forward: one build number per job, plus the log offset.
+num() { curl -s -u "admin:$PW" "$JENKINS/job/$1/api/json?tree=$2" \
+        | python3 -c "import json,sys;d=json.load(sys.stdin);print(d.get('$2') or 0)"; }
+J1_NEXT=$(num Job1-build nextBuildNumber)
+num Job1-build nextBuildNumber
+J2_LAST=$(curl -s -u "admin:$PW" "$JENKINS/job/Job2-test/api/json?tree=lastBuild%5Bnumber%5D" \
+  | python3 -c 'import json,sys;d=json.load(sys.stdin).get("lastBuild");print(d["number"] if d else 0)')
+curl -s -u "admin:$PW" "$JENKINS/job/Job2-test/api/json?tree=lastBuild%5Bnumber%5D"   | python3 -c 'import json,sys;d=json.load(sys.stdin).get("lastBuild");print(d["number"] if d else 0)'
+J3_LAST=$(curl -s -u "admin:$PW" "$JENKINS/job/Job3-prod/api/json?tree=lastBuild%5Bnumber%5D" \
+  | python3 -c 'import json,sys;d=json.load(sys.stdin).get("lastBuild");print(d["number"] if d else 0)')
+curl -s -u "admin:$PW" "$JENKINS/job/Job3-prod/api/json?tree=lastBuild%5Bnumber%5D"   | python3 -c 'import json,sys;d=json.load(sys.stdin).get("lastBuild");print(d["number"] if d else 0)'
+LOG_OFFSET=$(wc -l < "$JLOG" | tr -d ' ')
+wc -l < "$JLOG" | tr -d ' '
+echo "STATE job1_next=$J1_NEXT job2_last=$J2_LAST job3_last=$J3_LAST log_offset=$LOG_OFFSET"
+STATE job1_next=5 job2_last=5 job3_last=2 log_offset=1860
+
+# --- the change the push carries -------------------------------------------------------------------
+git checkout "$BRANCH" 2>&1 | tail -1
+  (use "git push" to publish your local commits)
+if [ "$BRANCH" = "develop" ]; then
+  printf 'capture %s %s\n' "$LABEL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> VERSION.txt
+  git add VERSION.txt
+  git commit -q -m "build: mark a develop push for the Capstone 1 capture ($(date -u +%Y-%m-%dT%H:%MZ))"
+else
+  git merge --no-ff develop -m "release: merge develop into master for the Capstone 1 capture"
+fi
+date -u +%Y-%m-%dT%H:%M:%SZ
+date -u +%Y-%m-%dT%H:%MZ
+
+echo "STATE head_after_commit=$(git rev-parse HEAD)"
+git rev-parse HEAD
+STATE head_after_commit=8841e7342b10d579a965eab6a089b099a2110e7e
+git push origin "$BRANCH" 2>&1
+Enumerating objects: 23, done.
+Counting objects:   4% (1/23)Counting objects:   8% (2/23)Counting objects:  13% (3/23)Counting objects:  17% (4/23)Counting objects:  21% (5/23)Counting objects:  26% (6/23)Counting objects:  30% (7/23)Counting objects:  34% (8/23)Counting objects:  39% (9/23)Counting objects:  43% (10/23)Counting objects:  47% (11/23)Counting objects:  52% (12/23)Counting objects:  56% (13/23)Counting objects:  60% (14/23)Counting objects:  65% (15/23)Counting objects:  69% (16/23)Counting objects:  73% (17/23)Counting objects:  78% (18/23)Counting objects:  82% (19/23)Counting objects:  86% (20/23)Counting objects:  91% (21/23)Counting objects:  95% (22/23)Counting objects: 100% (23/23)Counting objects: 100% (23/23), done.
+Delta compression using up to 16 threads
+Compressing objects:   8% (1/12)Compressing objects:  16% (2/12)Compressing objects:  25% (3/12)Compressing objects:  33% (4/12)Compressing objects:  41% (5/12)Compressing objects:  50% (6/12)Compressing objects:  58% (7/12)Compressing objects:  66% (8/12)Compressing objects:  75% (9/12)Compressing objects:  83% (10/12)Compressing objects:  91% (11/12)Compressing objects: 100% (12/12)Compressing objects: 100% (12/12), done.
+Writing objects:   7% (1/14)Writing objects:  14% (2/14)Writing objects:  21% (3/14)Writing objects:  28% (4/14)Writing objects:  35% (5/14)Writing objects:  42% (6/14)Writing objects:  50% (7/14)Writing objects:  57% (8/14)Writing objects:  64% (9/14)Writing objects:  71% (10/14)Writing objects:  78% (11/14)Writing objects:  85% (12/14)Writing objects:  92% (13/14)Writing objects: 100% (14/14)Writing objects: 100% (14/14), 7.41 KiB | 3.71 MiB/s, done.
+Total 14 (delta 5), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas:   0% (0/5)        remote: Resolving deltas:  20% (1/5)        remote: Resolving deltas:  40% (2/5)        remote: Resolving deltas:  60% (3/5)        remote: Resolving deltas:  80% (4/5)        remote: Resolving deltas: 100% (5/5)        remote: Resolving deltas: 100% (5/5), completed with 4 local objects.        
+To github.com:This1sN0tMe/abode-website.git
+   329016a..8841e73  develop -> develop
+
+# --- the controller's own record of that push --------------------------------------------------------
+sleep 3
+echo "===== controller log for this run's window ====="
+===== controller log for this run's window =====
+tail -n "+$((LOG_OFFSET + 1))" "$JLOG" | grep -E 'PushEvent|Poked|SCM changes detected' | sed 's/^/LOG /'
+LOG 2026-10-31 02:04:56.313+0000 [id=32]	INFO	o.j.p.g.w.s.DefaultPushGHEventSubscriber#onEvent: Received PushEvent for https://github.com/This1sN0tMe/abode-website from 9.234.106.57 ⇒ https://inkjet-drives-parent-better.trycloudflare.com:8080/github-webhook/
+LOG 2026-10-31 02:04:56.314+0000 [id=32]	INFO	o.j.p.g.w.s.DefaultPushGHEventSubscriber$1#run: Poked Job1-build
+LOG 2026-10-31 02:04:57.271+0000 [id=352]	INFO	c.c.jenkins.GitHubPushTrigger$1#run: SCM changes detected in Job1-build. Triggering #5
+
+# --- wait for Job1's build ---------------------------------------------------------------------------
+echo "WAIT for Job1-build to pass build $J1_NEXT"
+WAIT for Job1-build to pass build 5
+N="$J1_NEXT"
+for _ in $(seq 1 "$WAIT"); do
+  N=$(num Job1-build nextBuildNumber)
+  [ "${N:-0}" -gt "$J1_NEXT" ] 2>/dev/null && break
+  sleep 1
+done
+seq 1 "$WAIT"
+num Job1-build nextBuildNumber
+num Job1-build nextBuildNumber
+num Job1-build nextBuildNumber
+num Job1-build nextBuildNumber
+num Job1-build nextBuildNumber
+num Job1-build nextBuildNumber
+num Job1-build nextBuildNumber
+num Job1-build nextBuildNumber
+if [ "${N:-0}" -le "$J1_NEXT" ]; then
+  echo "ERROR no build started within ${WAIT}s — the webhook did not reach this controller"
+  echo "RESULT CAPTURE FAIL label=$LABEL reason=no_trigger"
+  exit 1
+fi
+BUILD=$((N - 1))
+echo "BUILD job=Job1-build number=$BUILD"
+BUILD job=Job1-build number=5
+
+wait_done() { # $1 job, $2 build number
+  for _ in $(seq 1 "$WAIT"); do
+    curl -s -u "admin:$PW" "$JENKINS/job/$1/$2/api/json?tree=building" | grep -q '"building":false' && return 0
+    sleep 2
+  done
+  return 1
+}
+result_of() { curl -s -u "admin:$PW" "$JENKINS/job/$1/$2/api/json?tree=result" \
+  | python3 -c 'import json,sys;print(json.load(sys.stdin).get("result"))'; }
+
+wait_done Job1-build "$BUILD"
+seq 1 "$WAIT"
+echo "RESULT_BUILD job=Job1-build number=$BUILD result=$(result_of Job1-build "$BUILD")"
+result_of Job1-build "$BUILD"
+RESULT_BUILD job=Job1-build number=5 result=SUCCESS
+echo "===== Job1-build console ====="
+===== Job1-build console =====
+curl -s -u "admin:$PW" "$JENKINS/job/Job1-build/$BUILD/consoleText"
+Started by GitHub push by This1sN0tMe
+Running as SYSTEM
+Building on the built-in node in workspace /Users/user/dev/labs/devops/jenkins/home/workspace/Job1-build
+The recommended git tool is: NONE
+No credentials specified
+ > git rev-parse --resolve-git-dir /Users/user/dev/labs/devops/jenkins/home/workspace/Job1-build/.git # timeout=10
+Fetching changes from the remote Git repository
+ > git config remote.origin.url git@github.com:This1sN0tMe/abode-website.git # timeout=10
+Fetching upstream changes from git@github.com:This1sN0tMe/abode-website.git
+ > git --version # timeout=10
+ > git --version # 'git version 2.50.1 (Apple Git-155)'
+ > git fetch --tags --force --progress -- git@github.com:This1sN0tMe/abode-website.git +refs/heads/*:refs/remotes/origin/* # timeout=10
+Seen branch in repository origin/develop
+Seen branch in repository origin/master
+Seen 2 remote branches
+ > git show-ref --tags -d # timeout=10
+Checking out Revision 8841e7342b10d579a965eab6a089b099a2110e7e (origin/develop)
+ > git config core.sparsecheckout # timeout=10
+ > git checkout -f 8841e7342b10d579a965eab6a089b099a2110e7e # timeout=10
+Commit message: "build: mark a develop push for the Capstone 1 capture (2026-10-31T02:04Z)"
+ > git rev-list --no-walk 329016a257c597683f20590ef3707b4e69135530 # timeout=10
+[Job1-build] $ /bin/sh -xe /var/folders/qk/fjnxz1wx4t9925nbwky4ncjw0000gn/T/jenkins8582521632864108045.sh
++ bash /Users/user/dev/labs/devops/capstones/capstone1/runners/job1-build.sh
+BRANCH=develop
+BRANCH_SOURCE=scm
+REF=origin/develop
+COMMIT=8841e73
+PROD_PROMOTED=no
+#0 building with "colima" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 928B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/hshar/webapp:latest
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 97B done
+#4 DONE 0.0s
+
+#5 [1/3] FROM docker.io/hshar/webapp:latest@sha256:3c7cbcab1a26c01410dcc9cbc57252b50d9ed2f31a2dc24e3f066c61b88e839b
+#5 resolve docker.io/hshar/webapp:latest@sha256:3c7cbcab1a26c01410dcc9cbc57252b50d9ed2f31a2dc24e3f066c61b88e839b 0.0s done
+#5 DONE 0.0s
+
+#6 [2/3] COPY index.html /var/www/html/index.html
+#6 CACHED
+
+#7 [3/3] COPY images/ /var/www/html/images/
+#7 CACHED
+
+#8 exporting to image
+#8 exporting layers 0.0s done
+#8 exporting manifest sha256:74094eed5f672c6fe0806af1f9f439376689bcc1bfab5a3a5b9ddc9500972a3b done
+#8 exporting config sha256:5f011b4519884c93d40c5cd268b93459a77d0765a985392016038c1797f4e401 done
+#8 exporting attestation manifest sha256:79a76370e371311551f40716a0a262187bed7a24f7666a6bd6f7336ae7815e1e 0.0s done
+#8 exporting manifest list sha256:e60fe51d79b5f215879074fcbcf64b2afec06dcdc93f55262699a92ed878623e
+#8 exporting manifest list sha256:e60fe51d79b5f215879074fcbcf64b2afec06dcdc93f55262699a92ed878623e done
+#8 naming to docker.io/library/abode-website:b5 done
+#8 unpacking to docker.io/library/abode-website:b5 0.0s done
+#8 naming to docker.io/library/abode-website:latest done
+#8 unpacking to docker.io/library/abode-website:latest 0.0s done
+#8 DONE 0.1s
+IMAGE=abode-website:b5
+IMAGE_ID=sha256:e60fe51d79b5f215879074fcbcf64b2afec06dcdc93f55262699a92ed878623e
+JOB2_TRIGGER_HTTP=201
+RESULT BUILD PASS image=abode-website:b5
+Finished: SUCCESS
+
+# --- Job2: must be a NEW build -----------------------------------------------------------------------
+echo "WAIT for Job2-test to exceed build $J2_LAST"
+WAIT for Job2-test to exceed build 5
+N2="$J2_LAST"
+for _ in $(seq 1 "$WAIT"); do
+  N2=$(curl -s -u "admin:$PW" "$JENKINS/job/Job2-test/api/json?tree=lastBuild%5Bnumber%5D" \
+       | python3 -c 'import json,sys;d=json.load(sys.stdin).get("lastBuild");print(d["number"] if d else 0)')
+  [ "${N2:-0}" -gt "$J2_LAST" ] 2>/dev/null && break
+  sleep 2
+done
+seq 1 "$WAIT"
+curl -s -u "admin:$PW" "$JENKINS/job/Job2-test/api/json?tree=lastBuild%5Bnumber%5D"        | python3 -c 'import json,sys;d=json.load(sys.stdin).get("lastBuild");print(d["number"] if d else 0)'
+curl -s -u "admin:$PW" "$JENKINS/job/Job2-test/api/json?tree=lastBuild%5Bnumber%5D"        | python3 -c 'import json,sys;d=json.load(sys.stdin).get("lastBuild");print(d["number"] if d else 0)'
+curl -s -u "admin:$PW" "$JENKINS/job/Job2-test/api/json?tree=lastBuild%5Bnumber%5D"        | python3 -c 'import json,sys;d=json.load(sys.stdin).get("lastBuild");print(d["number"] if d else 0)'
+curl -s -u "admin:$PW" "$JENKINS/job/Job2-test/api/json?tree=lastBuild%5Bnumber%5D"        | python3 -c 'import json,sys;d=json.load(sys.stdin).get("lastBuild");print(d["number"] if d else 0)'
+curl -s -u "admin:$PW" "$JENKINS/job/Job2-test/api/json?tree=lastBuild%5Bnumber%5D"        | python3 -c 'import json,sys;d=json.load(sys.stdin).get("lastBuild");print(d["number"] if d else 0)'
+if [ "${N2:-0}" -le "$J2_LAST" ]; then
+  echo "ERROR Job2-test did not start — Job1 did not hand off"
+  echo "RESULT CAPTURE FAIL label=$LABEL reason=no_job2"
+  exit 1
+fi
+wait_done Job2-test "$N2"
+seq 1 "$WAIT"
+echo "RESULT_BUILD job=Job2-test number=$N2 result=$(result_of Job2-test "$N2")"
+result_of Job2-test "$N2"
+RESULT_BUILD job=Job2-test number=6 result=SUCCESS
+echo "===== Job2-test console ====="
+===== Job2-test console =====
+curl -s -u "admin:$PW" "$JENKINS/job/Job2-test/$N2/consoleText"
+Started by user unknown or anonymous
+Running as SYSTEM
+Building on the built-in node in workspace /Users/user/dev/labs/devops/jenkins/home/workspace/Job2-test
+[Job2-test] $ /bin/sh -xe /var/folders/qk/fjnxz1wx4t9925nbwky4ncjw0000gn/T/jenkins7207803072630663384.sh
++ bash /Users/user/dev/labs/devops/capstones/capstone1/runners/job2-test.sh
+BRANCH=develop PROD_PROMOTED=no
+IMAGE=abode-website:b5 COMMIT=8841e73
+790e51b93699c2920575f285804e7ad7fd9f63980744078a5f3e132139ccc162
+ASSERT home_status=200
+ASSERT asset_status=200
+ASSERT asset_bytes=107935
+ASSERT body=Hello world! PASS
+RESULT TEST PASS image=abode-website:b5
+PROD_PROMOTED=no - Job3-prod not invoked; a develop push is test-only
+PROD_SKIPPED=yes
+Finished: SUCCESS
+
+# --- Job3: only when this branch is supposed to reach prod --------------------------------------------
+if [ "$EXPECT_PROD" = "yes" ]; then
+  echo "WAIT for Job3-prod to exceed build $J3_LAST"
+  N3="$J3_LAST"
+  for _ in $(seq 1 "$WAIT"); do
+    N3=$(curl -s -u "admin:$PW" "$JENKINS/job/Job3-prod/api/json?tree=lastBuild%5Bnumber%5D" \
+         | python3 -c 'import json,sys;d=json.load(sys.stdin).get("lastBuild");print(d["number"] if d else 0)')
+    [ "${N3:-0}" -gt "$J3_LAST" ] 2>/dev/null && break
+    sleep 2
+  done
+  if [ "${N3:-0}" -le "$J3_LAST" ]; then
+    echo "ERROR Job3-prod did not start on a master push"
+    echo "RESULT CAPTURE FAIL label=$LABEL reason=no_job3"
+    exit 1
+  fi
+  wait_done Job3-prod "$N3"
+  echo "RESULT_BUILD job=Job3-prod number=$N3 result=$(result_of Job3-prod "$N3")"
+  echo "===== Job3-prod console ====="
+  curl -s -u "admin:$PW" "$JENKINS/job/Job3-prod/$N3/consoleText"
+else
+  echo "OBSERVED prod_builds_before=$J3_LAST prod_builds_after=$(curl -s -u "admin:$PW" \
+    "$JENKINS/job/Job3-prod/api/json?tree=lastBuild%5Bnumber%5D" \
+    | python3 -c 'import json,sys;d=json.load(sys.stdin).get("lastBuild");print(d["number"] if d else 0)') — develop must not reach prod"
+fi
+curl -s -u "admin:$PW"     "$JENKINS/job/Job3-prod/api/json?tree=lastBuild%5Bnumber%5D"     | python3 -c 'import json,sys;d=json.load(sys.stdin).get("lastBuild");print(d["number"] if d else 0)'
+OBSERVED prod_builds_before=2 prod_builds_after=2 — develop must not reach prod
+
+echo "HTTP_PROD=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:80/)"
+curl -s -o /dev/null -w '%{http_code}' http://localhost:80/
+HTTP_PROD=200
+echo "RESULT CAPTURE PASS label=$LABEL branch=$BRANCH build=$BUILD"
+RESULT CAPTURE PASS label=develop branch=develop build=5
